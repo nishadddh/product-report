@@ -1,0 +1,3469 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Field Survey GPS & OCR Dashboard</title>
+  
+  <!-- Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- CDN Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/exifr@4.3.0/dist/full.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.3/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* DESIGN SYSTEM & GLOBAL STYLES */
+    :root {
+      --bg-primary: #f8fafc;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #f1f5f9;
+      --bg-card-hover: #f8fafc;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --border-color: #e2e8f0;
+      
+      --accent-color: #0ea5e9;
+      --accent-hover: #0284c7;
+      --accent-light: rgba(14, 165, 233, 0.1);
+      
+      --success-color: #10b981;
+      --success-light: rgba(16, 185, 129, 0.1);
+      
+      --warning-color: #f59e0b;
+      --warning-light: rgba(245, 158, 11, 0.15);
+      
+      --danger-color: #ef4444;
+      --danger-light: rgba(239, 68, 68, 0.1);
+      
+      --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      --input-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --focus-ring: 0 0 0 3px rgba(14, 165, 233, 0.3);
+      --border-radius: 12px;
+      --transition-speed: 0.2s;
+    }
+
+    [data-theme="dark"] {
+      --bg-primary: #09090b;
+      --bg-secondary: #18181b;
+      --bg-tertiary: #27272a;
+      --bg-card-hover: #212124;
+      --text-primary: #f4f4f5;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --border-color: #27272a;
+      
+      --accent-color: #38bdf8;
+      --accent-hover: #0ea5e9;
+      --accent-light: rgba(56, 189, 248, 0.1);
+      
+      --success-color: #34d399;
+      --success-light: rgba(52, 211, 153, 0.1);
+      
+      --warning-color: #fbbf24;
+      --warning-light: rgba(251, 191, 36, 0.15);
+      
+      --danger-color: #f87171;
+      --danger-light: rgba(248, 113, 113, 0.1);
+      
+      --card-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+      --input-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+      --focus-ring: 0 0 0 3px rgba(56, 189, 248, 0.3);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-family);
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      transition: background-color var(--transition-speed), color var(--transition-speed);
+    }
+
+    /* TOAST SYSTEM */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 380px;
+      width: calc(100vw - 40px);
+    }
+
+    .toast {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      box-shadow: var(--card-shadow);
+      padding: 14px 18px;
+      border-radius: var(--border-radius);
+      color: var(--text-primary);
+      animation: slideIn 0.3s ease forwards;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .toast::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: var(--accent-color);
+    }
+
+    .toast.success::before { background: var(--success-color); }
+    .toast.error::before { background: var(--danger-color); }
+    .toast.warning::before { background: var(--warning-color); }
+
+    .toast-close {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateX(120%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    @keyframes fadeOut {
+      to { opacity: 0; transform: translateY(-10px); }
+    }
+
+    /* HEADER & MAIN NAVIGATION */
+    header {
+      background-color: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-container h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* PROGRESS INDICATOR */
+    .header-progress {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-tertiary);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .progress-bar-bg {
+      width: 100px;
+      height: 6px;
+      background: var(--border-color);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--success-color);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    /* GENERAL BUTTON STYLES */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background-color: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 8px 16px;
+      font-family: var(--font-family);
+      font-size: 0.9rem;
+      font-weight: 500;
+      border-radius: var(--border-radius);
+      cursor: pointer;
+      transition: all var(--transition-speed) ease;
+      user-select: none;
+    }
+
+    .btn:hover {
+      background-color: var(--border-color);
+    }
+
+    .btn:focus-visible {
+      outline: none;
+      box-shadow: var(--focus-ring);
+    }
+
+    .btn-primary {
+      background-color: var(--accent-color);
+      border-color: var(--accent-color);
+      color: #ffffff;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+
+    .btn-success {
+      background-color: var(--success-color);
+      border-color: var(--success-color);
+      color: #ffffff;
+    }
+
+    .btn-success:hover {
+      background-color: #059669;
+      border-color: #059669;
+    }
+
+    .btn-danger {
+      background-color: var(--danger-color);
+      border-color: var(--danger-color);
+      color: #ffffff;
+    }
+
+    .btn-danger:hover {
+      background-color: #dc2626;
+      border-color: #dc2626;
+    }
+
+    .btn-icon {
+      padding: 8px;
+      border-radius: var(--border-radius);
+    }
+
+    .btn-large {
+      padding: 12px 24px;
+      font-size: 1rem;
+      border-radius: var(--border-radius);
+    }
+
+    /* MAIN CONTAINER LAYOUT */
+    .dashboard-container {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 65px);
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* EMPTY STATE DRAG & DROP */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 40px;
+      flex: 1;
+      background: var(--bg-primary);
+      overflow-y: auto;
+    }
+
+    .dropzone {
+      max-width: 600px;
+      width: 100%;
+      border: 2.5px dashed var(--border-color);
+      border-radius: 20px;
+      padding: 60px 40px;
+      background: var(--bg-secondary);
+      cursor: pointer;
+      transition: border-color var(--transition-speed), transform var(--transition-speed);
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--accent-color);
+      transform: scale(1.01);
+    }
+
+    .dropzone-icon {
+      width: 64px;
+      height: 64px;
+      background: var(--accent-light);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-color);
+      margin-bottom: 8px;
+    }
+
+    .dropzone h3 {
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+
+    .dropzone p {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      max-width: 400px;
+      line-height: 1.5;
+    }
+
+    .file-input {
+      display: none;
+    }
+
+    /* MULTI-SELECT DROPDOWN FOR MOST SALES */
+    .multiselect-container {
+      position: relative;
+      width: 100%;
+    }
+
+    .select-btn {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      text-align: left;
+      cursor: pointer;
+      background-color: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: var(--border-radius);
+      font-size: 0.9rem;
+      font-family: var(--font-family);
+    }
+
+    .multiselect-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+      margin-top: 4px;
+      max-height: 220px;
+      overflow-y: auto;
+      z-index: 150;
+      display: none;
+      box-shadow: var(--card-shadow);
+      padding: 8px;
+    }
+
+    .multiselect-dropdown.show {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .multiselect-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: var(--text-primary);
+    }
+
+    .multiselect-option:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .multiselect-option input {
+      cursor: pointer;
+      width: 16px;
+      height: 16px;
+    }
+
+    /* IMAGE GALLERY FOR MULTIPLE PHOTOS */
+    .image-gallery-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .gallery-thumb-wrapper {
+      width: 54px;
+      height: 54px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 2px solid transparent;
+      cursor: pointer;
+      position: relative;
+      background: var(--bg-tertiary);
+      transition: border-color var(--transition-speed);
+    }
+
+    .gallery-thumb-wrapper.active {
+      border-color: var(--accent-color);
+    }
+
+    .gallery-thumb {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .btn-remove-thumb {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.85);
+      color: white;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s, background-color 0.2s;
+      z-index: 5;
+    }
+    .gallery-thumb-wrapper:hover .btn-remove-thumb {
+      opacity: 1;
+    }
+    .btn-remove-thumb:hover {
+      background: rgba(220, 38, 38, 1);
+    }
+
+    .gallery-btn-add {
+      width: 54px;
+      height: 54px;
+      border-radius: 6px;
+      border: 1.5px dashed var(--border-color);
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all var(--transition-speed);
+    }
+
+    .gallery-btn-add:hover {
+      border-color: var(--accent-color);
+      color: var(--accent-color);
+      background: var(--bg-tertiary);
+    }
+
+    /* MOBILE NAVIGATION TABS (HIDDEN ON DESKTOP) */
+    .mobile-tabs {
+      display: none;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      z-index: 100;
+    }
+
+    .mobile-tab-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      font-weight: 500;
+      font-family: var(--font-family);
+      cursor: pointer;
+    }
+
+    .mobile-tab-btn.active {
+      color: var(--accent-color);
+    }
+
+    /* SIDEBAR (QUEUE / LIST VIEW) */
+    .sidebar {
+      width: 360px;
+      min-width: 320px;
+      background-color: var(--bg-secondary);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .sidebar-search {
+      padding: 16px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .search-input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 12px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 10px 12px 10px 40px;
+      background-color: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+      color: var(--text-primary);
+      font-family: var(--font-family);
+      font-size: 0.9rem;
+      outline: none;
+      transition: all var(--transition-speed);
+    }
+
+    .search-input:focus {
+      border-color: var(--accent-color);
+      background-color: var(--bg-secondary);
+      box-shadow: var(--focus-ring);
+    }
+
+    .sidebar-stats {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 0 4px;
+    }
+
+    .queue-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* REPORT CARD COMPACT ITEM */
+    .queue-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      border-radius: var(--border-radius);
+      border: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      cursor: pointer;
+      transition: all var(--transition-speed) ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .queue-item:hover {
+      background-color: var(--bg-card-hover);
+      border-color: var(--text-muted);
+    }
+
+    .queue-item.active {
+      background-color: var(--accent-light);
+      border-color: var(--accent-color);
+    }
+
+    .queue-thumb-wrapper {
+      position: relative;
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--bg-tertiary);
+      flex-shrink: 0;
+    }
+
+    .queue-thumb {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .queue-item-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .queue-item-name {
+      font-weight: 600;
+      font-size: 0.9rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text-primary);
+    }
+
+    .queue-item-shop {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .queue-item-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* CARD STATUS BADGES */
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      display: inline-block;
+    }
+
+    .status-dot.pending { background: var(--warning-color); }
+    .status-dot.completed { background: var(--success-color); }
+    .status-dot.scanning {
+      background: var(--accent-color);
+      animation: pulse 1s infinite alternate;
+    }
+
+    @keyframes pulse {
+      from { opacity: 0.4; transform: scale(0.8); }
+      to { opacity: 1; transform: scale(1.2); }
+    }
+
+    .badge-ocr {
+      background: var(--accent-light);
+      color: var(--accent-color);
+      font-size: 0.7rem;
+      padding: 1px 4px;
+      border-radius: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge-warning-low {
+      background: var(--warning-light);
+      color: var(--warning-color);
+      font-size: 0.7rem;
+      padding: 1px 4px;
+      border-radius: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    /* EDITOR AREA */
+    .editor-area {
+      flex: 1;
+      height: 100%;
+      overflow-y: auto;
+      background: var(--bg-tertiary);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .editor-header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .editor-nav-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .editor-nav-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .editor-nav-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .editor-nav-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* ACTIVE CARD GRID */
+    .editor-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 20px;
+      padding: 20px;
+      flex: 1;
+    }
+
+    @media (max-width: 1024px) {
+      .editor-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* LEFT SUBCOL: IMAGE & METADATA */
+    .editor-media-col {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .image-preview-card {
+      background: var(--bg-secondary);
+      border-radius: var(--border-radius);
+      border: 1px solid var(--border-color);
+      padding: 12px;
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      position: relative;
+    }
+
+    .image-container-wrapper {
+      position: relative;
+      border-radius: 8px;
+      overflow: hidden;
+      aspect-ratio: 4/3;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: zoom-in;
+    }
+
+    .active-image {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      transition: transform var(--transition-speed);
+    }
+
+    .btn-expand-overlay {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      background: rgba(0, 0, 0, 0.6);
+      color: #fff;
+      border: none;
+      padding: 8px;
+      border-radius: 50%;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+    }
+
+    .metadata-quick-list {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      background: var(--bg-secondary);
+      border-radius: var(--border-radius);
+      border: 1px solid var(--border-color);
+      padding: 16px;
+      box-shadow: var(--card-shadow);
+    }
+
+    .meta-box {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .meta-box-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .meta-box-value {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .badge-source {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      width: fit-content;
+    }
+
+    .badge-source.exif { background: var(--success-light); color: var(--success-color); }
+    .badge-source.ocr { background: var(--accent-light); color: var(--accent-color); }
+    .badge-source.manual { background: var(--bg-tertiary); color: var(--text-secondary); }
+
+    /* RIGHT SUBCOL: FORM & ACTIONS */
+    .editor-form-col {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* OCR CONFIDENCE ALERT */
+    .ocr-alert {
+      background: var(--warning-light);
+      border: 1px solid var(--warning-color);
+      border-radius: var(--border-radius);
+      padding: 14px;
+      color: var(--text-primary);
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 0.88rem;
+      line-height: 1.4;
+    }
+
+    .ocr-alert-icon {
+      color: var(--warning-color);
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .ocr-loader-banner {
+      background: var(--accent-light);
+      border: 1px solid var(--accent-color);
+      border-radius: var(--border-radius);
+      padding: 14px;
+      color: var(--text-primary);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 0.88rem;
+    }
+
+    .ocr-loader-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ocr-spinner {
+      width: 18px;
+      height: 18px;
+      border: 2.5px solid var(--accent-color);
+      border-bottom-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .ocr-progress-container {
+      width: 100%;
+      height: 6px;
+      background: var(--border-color);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .ocr-progress-bar {
+      height: 100%;
+      background: var(--accent-color);
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+
+    /* FORM CARD CONTAINER */
+    .form-card {
+      background: var(--bg-secondary);
+      border-radius: var(--border-radius);
+      border: 1px solid var(--border-color);
+      padding: 20px;
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-group.full-width {
+      grid-column: span 2;
+    }
+
+    .form-label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .form-label.required::after {
+      content: '*';
+      color: var(--danger-color);
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 10px 14px;
+      background-color: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+      color: var(--text-primary);
+      font-family: var(--font-family);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color var(--transition-speed), background-color var(--transition-speed);
+    }
+
+    .form-control:focus {
+      border-color: var(--accent-color);
+      background-color: var(--bg-secondary);
+      box-shadow: var(--focus-ring);
+    }
+
+    /* OCR LOW CONFIDENCE FORM HIGHLIGHT */
+    .form-control.input-warning {
+      border-color: var(--warning-color);
+      background-color: var(--warning-light);
+    }
+
+    textarea.form-control {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    /* REASON CHIPS LIST */
+    .reason-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .reason-chip {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      padding: 4px 10px;
+      border-radius: 16px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition-speed);
+      color: var(--text-secondary);
+    }
+
+    .reason-chip:hover {
+      background: var(--border-color);
+      color: var(--text-primary);
+    }
+
+    .reason-chip.selected {
+      background: var(--accent-color);
+      color: #ffffff;
+      border-color: var(--accent-color);
+    }
+
+    /* ACTION BAR FOR CARD */
+    .action-panel-card {
+      background: var(--bg-secondary);
+      border-radius: var(--border-radius);
+      border: 1px solid var(--border-color);
+      padding: 20px;
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .primary-action-row {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+
+    .action-grid-buttons {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    /* LIGHTBOX / FULLSCREEN MODAL */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-content-wrapper {
+      max-width: 90%;
+      max-height: 90%;
+      position: relative;
+    }
+
+    .lightbox-image {
+      max-width: 100%;
+      max-height: 85vh;
+      object-fit: contain;
+      border-radius: 4px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+
+    .btn-close-modal {
+      position: absolute;
+      top: -40px;
+      right: 0;
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
+
+    /* CONFIRMATION DIALOG MODAL */
+    .confirm-modal {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+      padding: 24px;
+      max-width: 450px;
+      width: 100%;
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      animation: zoomIn 0.2s ease forwards;
+    }
+
+    @keyframes zoomIn {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .confirm-modal h3 {
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    .confirm-modal p {
+      color: var(--text-secondary);
+      font-size: 0.92rem;
+      line-height: 1.5;
+    }
+
+    .confirm-modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    /* HOTKEY FLOATING HELP */
+    .hotkey-helper-bar {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 20px;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      padding: 10px 24px;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .hotkey-badge {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    /* MOBILE LAYOUT & RESPONSIVENESS */
+    @media (max-width: 768px) {
+      header {
+        padding: 10px 16px;
+      }
+      
+      .logo-container h1 {
+        font-size: 1.1rem;
+      }
+      
+      .header-actions .btn {
+        padding: 6px 12px;
+        font-size: 0.8rem;
+      }
+
+      .header-progress {
+        display: none; /* Hide progress in tiny header on mobile */
+      }
+
+      .dashboard-container {
+        flex-direction: column;
+        height: calc(100vh - 124px); /* Header + Tab bar */
+      }
+
+      .sidebar {
+        width: 100%;
+        height: 100%;
+        display: none; /* Controlled by mobile tabs */
+      }
+
+      .sidebar.mobile-active {
+        display: flex;
+      }
+
+      .editor-area {
+        width: 100%;
+        height: 100%;
+        display: none; /* Controlled by mobile tabs */
+      }
+
+      .editor-area.mobile-active {
+        display: flex;
+      }
+
+      .editor-grid {
+        grid-template-columns: 1fr;
+        padding: 10px;
+        gap: 10px;
+      }
+
+      .form-row {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .form-group.full-width {
+        grid-column: span 1;
+      }
+
+      .action-grid-buttons {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+      }
+
+      .action-grid-buttons .btn {
+        padding: 8px 10px;
+        font-size: 0.82rem;
+      }
+
+      .image-container-wrapper {
+        aspect-ratio: 16/10;
+        max-height: 220px;
+      }
+
+      .form-card, .action-panel-card, .image-preview-card, .metadata-quick-list {
+        padding: 12px;
+        border-radius: 10px;
+      }
+
+      .form-control {
+        padding: 8px 12px;
+        font-size: 0.85rem;
+      }
+
+      .header-actions .btn span {
+        display: none; /* Hide text, icon-only on mobile */
+      }
+
+      .header-actions .btn {
+        padding: 8px;
+      }
+
+      .mobile-tabs {
+        display: flex;
+        box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
+        padding-bottom: env(safe-area-inset-bottom);
+        height: calc(60px + env(safe-area-inset-bottom));
+      }
+
+      .mobile-tab-btn {
+        font-size: 0.8rem;
+      }
+
+      .dropzone {
+        padding: 30px 16px;
+      }
+
+      .dropzone h3 {
+        font-size: 1.25rem;
+      }
+
+      .dropzone p {
+        font-size: 0.85rem;
+      }
+
+      .btn-large {
+        padding: 12px 24px;
+      }
+      
+      .hotkey-helper-bar {
+        display: none; /* Hide hotkeys on mobile */
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOASTS CONTAINER -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- LIGHTBOX MODAL -->
+  <div id="lightbox-modal" class="modal-overlay" onclick="closeLightbox()">
+    <div class="modal-content-wrapper" onclick="event.stopPropagation()">
+      <button class="btn-close-modal" onclick="closeLightbox()">&times;</button>
+      <img id="lightbox-img" class="lightbox-image" src="" alt="Lightbox Preview">
+    </div>
+  </div>
+
+  <!-- CONFIRM DELETE DIALOG -->
+  <div id="confirm-modal" class="modal-overlay">
+    <div class="confirm-modal">
+      <h3>Reset Database</h3>
+      <p>Are you sure you want to delete all reports? This will permanently wipe all uploaded survey images and database records. This action cannot be undone.</p>
+      <div class="confirm-modal-actions">
+        <button class="btn" onclick="closeConfirmModal()">Cancel</button>
+        <button class="btn btn-danger" onclick="confirmClearAll()">Reset Database</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo-container">
+      <i data-lucide="map-pin" style="color: var(--accent-color);"></i>
+      <h1>Field Survey GPS & OCR</h1>
+    </div>
+
+    <!-- Progress Indicator -->
+    <div class="header-progress" id="progress-indicator">
+      <span>Completed 0/0</span>
+      <div class="progress-bar-bg">
+        <div id="progress-bar-fill" class="progress-bar-fill"></div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn btn-icon" id="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
+        <i data-lucide="moon"></i>
+      </button>
+      <button class="btn btn-primary" id="btn-export-excel" onclick="triggerExcelExport()" title="Export reports to Excel">
+        <i data-lucide="file-spreadsheet"></i>
+        <span>Excel</span>
+      </button>
+      <button class="btn btn-primary" id="btn-export-pdf" onclick="triggerPDFExport()" title="Export reports to PDF">
+        <i data-lucide="file-text"></i>
+        <span>PDF</span>
+      </button>
+      <button class="btn btn-danger btn-icon" onclick="openConfirmModal()" title="Reset and Delete All Reports">
+        <i data-lucide="trash-2"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- DASHBOARD CONTAINER -->
+  <div class="dashboard-container">
+    
+    <!-- EMPTY STATE VIEW -->
+    <div class="empty-state" id="empty-state-view">
+      <div class="dropzone" id="dropzone" onclick="document.getElementById('file-picker').click()">
+        <div class="dropzone-icon">
+          <i data-lucide="upload-cloud" style="width: 32px; height: 32px;"></i>
+        </div>
+        <h3>Drag & Drop Survey Images</h3>
+        <p>Select or drop multiple shop photos. We will extract EXIF coordinates automatically or run OCR scan fallbacks for watermarked text.</p>
+        <button class="btn btn-primary btn-large">Select Images</button>
+        <input type="file" id="file-picker" class="file-input" multiple accept="image/*" onchange="onFilesSelected(event)">
+      </div>
+    </div>
+
+    <!-- QUEUE / SIDEBAR PANEL -->
+    <aside class="sidebar" id="sidebar-panel">
+      <div class="sidebar-search">
+        <div class="search-input-wrapper">
+          <i data-lucide="search" class="search-icon"></i>
+          <input type="text" id="search-input" class="search-input" placeholder="Search by Shop, Phone, Address..." oninput="handleSearch(event)">
+        </div>
+        <div class="sidebar-stats">
+          <span>Survey Queue</span>
+          <span id="queue-count-label">0 Cards</span>
+        </div>
+      </div>
+      <div class="queue-list" id="queue-list-container">
+        <!-- Rendered dynamically -->
+      </div>
+    </aside>
+
+    <!-- FOCUSED CARD EDITOR -->
+    <main class="editor-area" id="editor-panel">
+      <div class="editor-header">
+        <div class="editor-nav-info">
+          <span class="editor-nav-title" id="active-file-title">File Name</span>
+          <span class="editor-nav-subtitle" id="active-card-indicator">Card 0 of 0</span>
+        </div>
+        <div class="editor-nav-buttons">
+          <button class="btn btn-icon" onclick="goToPrevReport()" title="Previous Image">
+            <i data-lucide="chevron-left"></i>
+          </button>
+          <button class="btn btn-icon" onclick="goToNextReport()" title="Next Image">
+            <i data-lucide="chevron-right"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="editor-grid">
+        <!-- Media / Metadata Details -->
+        <div class="editor-media-col">
+          <div class="image-preview-card">
+            <div class="image-container-wrapper" onclick="openLightbox()">
+              <img id="active-image-preview" class="active-image" src="" alt="Active Photo">
+              <button class="btn-expand-overlay" title="View Fullscreen">
+                <i data-lucide="maximize-2" style="width: 16px; height: 16px;"></i>
+              </button>
+            </div>
+            
+            <!-- Gallery thumbnails strip -->
+            <div class="image-gallery-row" id="image-gallery-row"></div>
+            <input type="file" id="gallery-file-picker" style="display: none;" accept="image/*" onchange="onAddPhotoToActiveCard(event)">
+          </div>
+
+          <div class="metadata-quick-list">
+            <div class="meta-box">
+              <span class="meta-box-label">GPS Metadata Source</span>
+              <span id="meta-source-badge" class="badge-source exif">EXIF GPS</span>
+            </div>
+            <div class="meta-box">
+              <span class="meta-box-label">Camera Model</span>
+              <span id="meta-camera-value" class="meta-box-value">N/A</span>
+            </div>
+            <div class="meta-box">
+              <span class="meta-box-label">Date Captured</span>
+              <span id="meta-date-value" class="meta-box-value">N/A</span>
+            </div>
+            <div class="meta-box">
+              <span class="meta-box-label">Time Captured</span>
+              <span id="meta-time-value" class="meta-box-value">N/A</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Form Edit / Copy Actions -->
+        <div class="editor-form-col">
+          <!-- OCR Confidence Banner -->
+          <div class="ocr-alert" id="ocr-confidence-alert" style="display: none;">
+            <i data-lucide="alert-triangle" class="ocr-alert-icon"></i>
+            <div>
+              <strong>Low Confidence OCR Match!</strong>
+              <p style="font-size: 0.8rem; margin-top: 2px; color: var(--text-secondary);">Watermarked text coordinates were extracted with low confidence. Please verify Latitude, Longitude, and Address fields.</p>
+            </div>
+          </div>
+
+          <!-- OCR Loader Banner -->
+          <div class="ocr-loader-banner" id="ocr-loader-banner" style="display: none;">
+            <div class="ocr-loader-row">
+              <div class="ocr-spinner"></div>
+              <strong id="ocr-scanning-status-label">OCR Scanner Running...</strong>
+            </div>
+            <div class="ocr-progress-container">
+              <div id="ocr-progress-bar" class="ocr-progress-bar"></div>
+            </div>
+          </div>
+
+          <div class="form-card">
+            <!-- Shop Details -->
+            <div class="form-group full-width">
+              <label class="form-label required" for="edit-shop-name">Shop Name</label>
+              <input type="text" id="edit-shop-name" class="form-control" placeholder="Enter Shop Name" oninput="saveCurrentField('shopName', this.value)">
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label required" for="edit-phone">Phone Number</label>
+                <input type="tel" id="edit-phone" class="form-control" placeholder="Enter Phone Number" oninput="saveCurrentField('phoneNumber', this.value)">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="edit-employee">Employee Name</label>
+                <input type="text" id="edit-employee" class="form-control" placeholder="Optional" oninput="saveCurrentField('employeeName', this.value)">
+              </div>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label required" for="edit-reason-select">Reason</label>
+              <select id="edit-reason-select" class="form-control" onchange="onReasonSelectChange(this.value)">
+                <option value="">Select Reason...</option>
+                <option value="dont know about the brand">dont know about the brand</option>
+                <option value="have enough sales and supply">have enough sales and supply</option>
+                <option value="recently have supply now no supply">recently have supply now no supply</option>
+                <option value="manual_typing">manual typing the reson</option>
+              </select>
+              <input type="text" id="edit-reason-manual" class="form-control" style="margin-top: 8px; display: none;" placeholder="Type custom reason..." oninput="saveCurrentField('reason', this.value)">
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="edit-most-sales">Most Sales (Ticking)</label>
+              <div class="multiselect-container">
+                <button type="button" class="form-control select-btn" onclick="toggleMultiSelect(event)">
+                  <span id="multiselect-value">Select products...</span>
+                  <i data-lucide="chevron-down" style="width: 16px; height: 16px;"></i>
+                </button>
+                <div class="multiselect-dropdown" id="multiselect-dropdown">
+                  <label class="multiselect-option">
+                    <input type="checkbox" value="Cardamom" onchange="onMostSalesChange(this)"> Cardamom
+                  </label>
+                  <label class="multiselect-option">
+                    <input type="checkbox" value="Coffee" onchange="onMostSalesChange(this)"> Coffee
+                  </label>
+                  <label class="multiselect-option">
+                    <input type="checkbox" value="Marie" onchange="onMostSalesChange(this)"> Marie
+                  </label>
+                  <label class="multiselect-option">
+                    <input type="checkbox" value="Milk Rush" onchange="onMostSalesChange(this)"> Milk Rush
+                  </label>
+                  <label class="multiselect-option">
+                    <input type="checkbox" value="Arrow Root" onchange="onMostSalesChange(this)"> Arrow Root
+                  </label>
+                  <label class="multiselect-option">
+                    <input type="checkbox" value="First Bite" onchange="onMostSalesChange(this)"> First Bite
+                  </label>
+                  <label class="multiselect-option">
+                    <input type="checkbox" value="Crispy Daty" onchange="onMostSalesChange(this)"> Crispy Daty
+                  </label>
+                  <label class="multiselect-option">
+                    <input type="checkbox" value="Bourbon" onchange="onMostSalesChange(this)"> Bourbon
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- GPS Coordinates -->
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="edit-latitude">Latitude</label>
+                <input type="number" step="any" id="edit-latitude" class="form-control" placeholder="N/A" oninput="saveCurrentField('latitude', parseFloat(this.value) || null)">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="edit-longitude">Longitude</label>
+                <input type="number" step="any" id="edit-longitude" class="form-control" placeholder="N/A" oninput="saveCurrentField('longitude', parseFloat(this.value) || null)">
+              </div>
+            </div>
+
+            <!-- Address & Remarks -->
+            <div class="form-group full-width">
+              <label class="form-label" for="edit-address">Address</label>
+              <textarea id="edit-address" class="form-control" placeholder="Complete Address" oninput="saveCurrentField('address', this.value)"></textarea>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="edit-remarks">Remarks (optional)</label>
+              <textarea id="edit-remarks" class="form-control" placeholder="Any additional notes..." oninput="saveCurrentField('remarks', this.value)"></textarea>
+            </div>
+          </div>
+
+          <!-- Actions Grid -->
+          <div class="action-panel-card">
+            <div class="primary-action-row">
+              <button class="btn btn-success btn-large" id="btn-copy-report" onclick="copyAndNextAction()" style="font-weight:600;">
+                <i data-lucide="copy"></i>
+                <span>Copy Report & Next</span>
+              </button>
+            </div>
+
+            <div class="action-grid-buttons">
+              <button class="btn" onclick="verifyLocationAction()">
+                <i data-lucide="map"></i>
+                <span>Verify Location</span>
+              </button>
+              <button class="btn" onclick="manualReverseGeocode()">
+                <i data-lucide="navigation"></i>
+                <span>Reverse Geocode</span>
+              </button>
+              <button class="btn" onclick="copyCoordinatesAction()">
+                <i data-lucide="crosshair"></i>
+                <span>Copy Coordinates</span>
+              </button>
+              <button class="btn" onclick="copyMapsLinkAction()">
+                <i data-lucide="external-link"></i>
+                <span>Copy Maps Link</span>
+              </button>
+              <button class="btn" onclick="copyAddressAction()">
+                <i data-lucide="map-pin"></i>
+                <span>Copy Address</span>
+              </button>
+              <button class="btn" id="btn-image-copy" onclick="copyImageWrapper()">
+                <i data-lucide="image"></i>
+                <span>Copy Image</span>
+              </button>
+            </div>
+
+            <div class="share-row" style="display: flex; gap: 10px; margin-top: 4px;">
+              <button class="btn" onclick="shareTelegramAction()" style="flex: 1; background-color: #229ED9; color: white; border-color: #229ED9; font-weight: 600;">
+                <i data-lucide="send"></i>
+                <span>Share Telegram</span>
+              </button>
+              <button class="btn" onclick="shareWhatsAppAction()" style="flex: 1; background-color: #25D366; color: white; border-color: #25D366; font-weight: 600;">
+                <i data-lucide="message-circle"></i>
+                <span>Share WhatsApp</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- FLOATING KEYBOARD SHORTCUTS HINT -->
+  <footer class="hotkey-helper-bar" id="hotkey-footer">
+    <div>
+      <span class="hotkey-badge">Enter</span> Save, Copy Report, and Select Next Image
+    </div>
+    <div>
+      <span class="hotkey-badge">Ctrl + Enter</span> Open Google Maps Link
+    </div>
+  </footer>
+
+  <!-- MOBILE TAB BAR -->
+  <div class="mobile-tabs" id="mobile-tabs-container">
+    <button class="mobile-tab-btn active" id="tab-btn-queue" onclick="switchMobileTab('queue')">
+      <i data-lucide="list"></i>
+      <span>Queue</span>
+    </button>
+    <button class="mobile-tab-btn" id="tab-btn-editor" onclick="switchMobileTab('editor')">
+      <i data-lucide="edit-3"></i>
+      <span>Editor</span>
+    </button>
+  </div>
+
+  <!-- JAVASCRIPT APP LOGIC -->
+  <script>
+    // INDEXEDDB HELPER FOR ROBUST OFFLINE STORAGE
+    const DB_NAME = 'FieldSurveyDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'survey_reports';
+    let db = null;
+
+    function initDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onerror = (e) => reject(e);
+        request.onsuccess = (e) => {
+          db = e.target.result;
+          resolve(db);
+        };
+        request.onupgradeneeded = (e) => {
+          const dbInstance = e.target.result;
+          if (!dbInstance.objectStoreNames.contains(STORE_NAME)) {
+            dbInstance.createObjectStore(STORE_NAME, { keyPath: 'id' });
+          }
+        };
+      });
+    }
+
+    function saveReportDB(report) {
+      if (!db) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const request = store.put(JSON.parse(JSON.stringify(report))); // Clean object structure
+        request.onsuccess = () => resolve();
+        request.onerror = (e) => reject(e);
+      });
+    }
+
+    function getAllReportsDB() {
+      if (!db) return Promise.resolve([]);
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const request = store.getAll();
+        request.onsuccess = (e) => resolve(e.target.result || []);
+        request.onerror = (e) => reject(e);
+      });
+    }
+
+    function deleteReportDB(id) {
+      if (!db) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = (e) => reject(e);
+      });
+    }
+
+    function clearAllReportsDB() {
+      if (!db) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const request = store.clear();
+        request.onsuccess = () => resolve();
+        request.onerror = (e) => reject(e);
+      });
+    }
+
+    // STATE VARIABLES
+    let reports = [];
+    let filteredReports = [];
+    let activeIndex = -1;
+    let activeReport = null;
+    let searchQuery = "";
+    let mobileActiveTab = "queue"; // 'queue' or 'editor'
+
+    // QUEUES
+    const ocrQueue = [];
+    let isOcrActive = false;
+
+    const geocodeQueue = [];
+    let isGeocodingActive = false;
+
+    // UNIFIED SCHEMA MIGRATION HELPER
+    function migrateReportSchema(report) {
+      if (!report) return;
+      
+      // If it is an old schema, convert fileData and thumbnail into images array
+      if (!report.images || !Array.isArray(report.images)) {
+        report.images = [{
+          name: report.fileName || 'image.jpg',
+          fileData: report.fileData || '',
+          thumbnail: report.thumbnail || report.fileData || ''
+        }];
+        report.activeImageIndex = 0;
+      }
+      
+      // Initialize other new attributes if missing
+      if (report.mostSales === undefined) {
+        report.mostSales = "";
+      }
+    }
+
+    // INITIALIZATION
+    window.addEventListener('DOMContentLoaded', async () => {
+      // Initialize Lucide Icons
+      lucide.createIcons();
+
+      // Custom WhatsApp and Telegram direct URLs are used instead of buggy Web Share API on local context
+
+      // Load Theme Preference
+      const savedTheme = localStorage.getItem('theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+      updateThemeIcon(savedTheme);
+
+      // Initialize DB and load files
+      try {
+        await initDB();
+        const rawReports = await getAllReportsDB();
+        
+        // Apply schema migration on all loaded reports
+        rawReports.forEach(migrateReportSchema);
+        reports = rawReports;
+        
+        console.log("Loaded reports from IndexedDB:", reports.length);
+
+        if (reports.length > 0) {
+          activeIndex = 0;
+          activeReport = reports[0];
+          filteredReports = [...reports];
+          hideEmptyState();
+          renderSidebar();
+          renderActiveReport();
+          updateProgressBar();
+        } else {
+          showEmptyState();
+        }
+      } catch (err) {
+        console.error("Database initialization failed:", err);
+        showToast("Database error. Data won't be saved on reload.", "error");
+      }
+
+      // Register Drag and Drop events
+      setupDragAndDrop();
+
+      // Register keyboard listeners
+      setupKeyboardShortcuts();
+
+      // Multi-select dropdown click outside listener
+      window.addEventListener('click', (e) => {
+        const container = document.querySelector('.multiselect-container');
+        if (container && !container.contains(e.target)) {
+          const dropdown = document.getElementById('multiselect-dropdown');
+          if (dropdown) dropdown.classList.remove('show');
+        }
+      });
+    });
+
+    // TOAST NOTIFICATIONS
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      
+      let icon = 'info';
+      if (type === 'success') icon = 'check-circle';
+      if (type === 'error') icon = 'x-circle';
+      if (type === 'warning') icon = 'alert-triangle';
+
+      toast.innerHTML = `
+        <i data-lucide="${icon}"></i>
+        <div style="font-size: 0.88rem; font-weight: 500;">${message}</div>
+        <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+      `;
+      container.appendChild(toast);
+      lucide.createIcons({ attrs: { class: 'toast-icon' } });
+
+      // Auto remove toast after 4 seconds
+      setTimeout(() => {
+        toast.style.animation = 'fadeOut 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // EMPTY STATE TRIGGERS
+    function showEmptyState() {
+      document.getElementById('empty-state-view').style.display = 'flex';
+      document.getElementById('sidebar-panel').style.display = 'none';
+      document.getElementById('editor-panel').style.display = 'none';
+      document.getElementById('progress-indicator').style.display = 'none';
+      document.getElementById('hotkey-footer').style.display = 'none';
+    }
+
+    function hideEmptyState() {
+      document.getElementById('empty-state-view').style.display = 'none';
+      
+      // Responsive layout adjustment
+      if (window.innerWidth <= 768) {
+        switchMobileTab(mobileActiveTab);
+      } else {
+        document.getElementById('sidebar-panel').style.display = 'flex';
+        document.getElementById('editor-panel').style.display = 'flex';
+      }
+
+      document.getElementById('progress-indicator').style.display = 'flex';
+      if (window.innerWidth > 768) {
+        document.getElementById('hotkey-footer').style.display = 'flex';
+      }
+    }
+
+    // DRAG AND DROP
+    function setupDragAndDrop() {
+      const dropzone = document.getElementById('empty-state-view');
+      
+      window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+      });
+
+      window.addEventListener('dragleave', () => {
+        dropzone.classList.remove('dragover');
+      });
+
+      window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+          handleIncomingFiles(e.dataTransfer.files);
+        }
+      });
+    }
+
+    // THEME SWITCHER
+    function toggleTheme() {
+      const currentTheme = document.documentElement.getAttribute('data-theme');
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', newTheme);
+      localStorage.setItem('theme', newTheme);
+      updateThemeIcon(newTheme);
+    }
+
+    function updateThemeIcon(theme) {
+      const btn = document.getElementById('theme-toggle');
+      if (theme === 'dark') {
+        btn.innerHTML = `<i data-lucide="sun"></i>`;
+      } else {
+        btn.innerHTML = `<i data-lucide="moon"></i>`;
+      }
+      lucide.createIcons();
+    }
+
+    // THUMBNAIL GENERATOR (Preserves layout performance)
+    function generateThumbnail(file, maxWidth = 200) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            if (width > maxWidth) {
+              height = (maxWidth / width) * height;
+              width = maxWidth;
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // FILE CONTROLLERS
+    function onFilesSelected(event) {
+      if (event.target.files.length > 0) {
+        handleIncomingFiles(event.target.files);
+      }
+    }
+
+    // Smart coordinate repair for India locations (handles missing decimal points from OCR)
+    function fixMissingDecimal(valStr, type) {
+      if (!valStr) return null;
+      valStr = valStr.trim();
+      
+      // If it already has a decimal, return it cleaned
+      if (valStr.includes('.')) {
+        return parseFloat(valStr.replace(/[^\d\.\-]/g, ''));
+      }
+
+      // Clean non-digits
+      const clean = valStr.replace(/[^\d\-]/g, '');
+      if (!clean) return null;
+
+      const isNegative = clean.startsWith('-');
+      const digits = clean.replace('-', '');
+
+      if (digits.length <= 2) return parseFloat(clean);
+
+      if (type === 'lat') {
+        // India latitude is around 8 to 38 degrees
+        if (digits.startsWith('8') || digits.startsWith('9')) {
+          // Single digit: 9099441 -> 9.099441
+          return parseFloat((isNegative ? '-' : '') + digits[0] + '.' + digits.substring(1));
+        } else {
+          // Double digit: 1234567 -> 12.34567
+          return parseFloat((isNegative ? '-' : '') + digits.substring(0, 2) + '.' + digits.substring(2));
+        }
+      } else if (type === 'lon') {
+        // India longitude is around 68 to 98 degrees (always 2 digits)
+        // e.g. 76522312 -> 76.522312
+        return parseFloat((isNegative ? '-' : '') + digits.substring(0, 2) + '.' + digits.substring(2));
+      }
+
+      return parseFloat(clean);
+    }
+
+    // Extract India 10-digit phone numbers
+    function extractPhoneNumber(text) {
+      // Find consecutive 10 digits starting with 6,7,8,9
+      const indiaMobileRegex = /\b([6-9]\d{9})\b/;
+      const match = text.match(indiaMobileRegex);
+      if (match) return match[1];
+
+      // Try spaced or hyphenated phone numbers
+      const formattedRegex = /\b([6-9]\d{2})[-\s](\d{3})[-\s](\d{4})\b/;
+      const formattedMatch = text.match(formattedRegex);
+      if (formattedMatch) {
+        return formattedMatch[1] + formattedMatch[2] + formattedMatch[3];
+      }
+
+      return "";
+    }
+
+    // Handles batch file uploads - Grouping up to 4 images per report card
+    async function handleIncomingFiles(fileList) {
+      hideEmptyState();
+      
+      const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+      if (files.length === 0) return;
+
+      showToast(`Processing ${files.length} images...`, 'info');
+
+      const chunkSize = 4;
+      for (let i = 0; i < files.length; i += chunkSize) {
+        const chunk = files.slice(i, i + chunkSize);
+        const id = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9);
+        
+        const cardImages = [];
+        for (const file of chunk) {
+          const thumbnail = await generateThumbnail(file, 200);
+          const fileData = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.readAsDataURL(file);
+          });
+          cardImages.push({
+            name: file.name,
+            fileData: fileData,
+            thumbnail: thumbnail
+          });
+        }
+
+        // Instantiate Report Schema (holds up to 4 images)
+        const report = {
+          id,
+          fileName: chunk[0].name,
+          images: cardImages,
+          activeImageIndex: 0,
+          latitude: null,
+          longitude: null,
+          address: "",
+          date: "",
+          time: "",
+          cameraModel: "",
+          shopName: "",
+          phoneNumber: "",
+          reason: "",
+          mostSales: "", // Comma-separated product tags
+          employeeName: "",
+          remarks: "",
+          status: 'pending',
+          gpsSource: 'Scanning...',
+          confidenceLow: false
+        };
+
+        reports.push(report);
+        await saveReportDB(report);
+        
+        if (activeIndex === -1) {
+          activeIndex = reports.length - 1;
+          activeReport = report;
+        }
+
+        applyFilters();
+        updateProgressBar();
+
+        // Scan all images in this card for coordinates and phone number
+        scanCardCoordinates(report.id, chunk, cardImages);
+      }
+    }
+
+    // Scan only the first image in a card for coordinates, and all images for phone numbers
+    async function scanCardCoordinates(reportId, files, cardImages) {
+      const report = reports.find(r => r.id === reportId);
+      if (!report) return;
+
+      let coordinatesFound = false;
+
+      // 1. Try EXIF check first on the FIRST file of the card only
+      if (files.length > 0) {
+        const file = files[0];
+        try {
+          const metadata = await exifr.parse(file, { gps: true, tiff: true });
+          if (metadata) {
+            if (metadata.Model && !report.cameraModel) {
+              report.cameraModel = metadata.Model;
+            }
+            const captureDate = metadata.DateTimeOriginal || metadata.CreateDate;
+            if (captureDate instanceof Date && !report.date) {
+              report.date = captureDate.toISOString().split('T')[0];
+              report.time = captureDate.toTimeString().split(' ')[0];
+            }
+
+            if (metadata.latitude !== undefined && metadata.longitude !== undefined) {
+              report.latitude = parseFloat(metadata.latitude.toFixed(6));
+              report.longitude = parseFloat(metadata.longitude.toFixed(6));
+              report.gpsSource = 'EXIF GPS';
+              coordinatesFound = true;
+              
+              await saveReportDB(report);
+              enqueueGeocodeRequest(report.id, report.latitude, report.longitude);
+              refreshUIForReport(report.id);
+            }
+          }
+        } catch (e) {
+          console.warn("EXIF read skipped for first file:", file.name, e);
+        }
+      }
+
+      // 2. OCR Fallback: If no coordinates in EXIF of first image, scan first image via OCR
+      if (!coordinatesFound) {
+        report.gpsSource = 'Scanning OCR...';
+        await saveReportDB(report);
+        refreshUIForReport(report.id);
+
+        // Enqueue OCR for coordinates and phone scan on first image
+        if (cardImages.length > 0) {
+          enqueueOCRRequest(report.id, cardImages[0].fileData, 0, true);
+        }
+        
+        // Enqueue OCR for phone scan only on other images
+        for (let idx = 1; idx < cardImages.length; idx++) {
+          enqueueOCRRequest(report.id, cardImages[idx].fileData, idx, false);
+        }
+      } else {
+        // If EXIF coordinates were found, still enqueue OCR for phone number detection on all images
+        for (let idx = 0; idx < cardImages.length; idx++) {
+          enqueueOCRRequest(report.id, cardImages[idx].fileData, idx, false);
+        }
+      }
+    }
+
+    // OCR FALLBACK SCANNING QUEUE WITH MULTI-IMAGE INDEX SUPPORT
+    function enqueueOCRRequest(reportId, fileData, imageIndex, scanCoords = true) {
+      ocrQueue.push({ reportId, fileData, imageIndex, scanCoords });
+      processOCRQueue();
+    }
+
+    async function processOCRQueue() {
+      if (isOcrActive || ocrQueue.length === 0) return;
+      isOcrActive = true;
+
+      const { reportId, fileData, imageIndex, scanCoords } = ocrQueue.shift();
+      const report = reports.find(r => r.id === reportId);
+      if (!report) {
+        isOcrActive = false;
+        processOCRQueue();
+        return;
+      }
+
+      // Display scan progress in loader banner
+      if (reportId === (activeReport ? activeReport.id : null)) {
+        const label = document.getElementById('ocr-scanning-status-label');
+        if (label) label.innerText = `OCR Scanner (Scanning Photo ${imageIndex + 1}/${report.images.length})...`;
+        document.getElementById('ocr-loader-banner').style.display = 'block';
+      }
+
+      try {
+        const result = await Tesseract.recognize(
+          fileData,
+          'eng',
+          {
+            logger: m => {
+              if (m.status === 'recognizing' && reportId === (activeReport ? activeReport.id : null)) {
+                updateOCRProgressBar(m.progress);
+              }
+            }
+          }
+        );
+
+        const extractedText = result.data.text;
+        const confidence = result.data.confidence;
+        console.log(`OCR Text for ${report.fileName} [Image ${imageIndex + 1}]:`, extractedText);
+
+        const parsedGPS = parseWatermarkText(extractedText);
+        
+        // Extract Phone Number automatically
+        const phoneNo = extractPhoneNumber(extractedText);
+        if (phoneNo && !report.phoneNumber) {
+          report.phoneNumber = phoneNo;
+          showToast(`Phone number detected: ${phoneNo}`, 'success');
+          // Save and render update immediately
+          await saveReportDB(report);
+          if (activeReport && activeReport.id === report.id) {
+            document.getElementById('edit-phone').value = phoneNo;
+          }
+        }
+
+        // Apply coordinates if scanCoords is true and coordinates are found
+        if (scanCoords && parsedGPS.latitude !== null && parsedGPS.longitude !== null && report.latitude === null) {
+          report.latitude = parsedGPS.latitude;
+          report.longitude = parsedGPS.longitude;
+          report.gpsSource = 'OCR Watermark';
+          report.confidenceLow = confidence < 70;
+          if (parsedGPS.date) report.date = parsedGPS.date;
+          if (parsedGPS.time) report.time = parsedGPS.time;
+          if (parsedGPS.address) report.address = parsedGPS.address;
+          
+          await saveReportDB(report);
+          enqueueGeocodeRequest(report.id, report.latitude, report.longitude);
+        } else {
+          // Fill dates or address if missing
+          if (parsedGPS.date && !report.date) report.date = parsedGPS.date;
+          if (parsedGPS.time && !report.time) report.time = parsedGPS.time;
+          if (parsedGPS.address && !report.address) report.address = parsedGPS.address;
+
+          // If coordinates are missing and we are scanning coordinates, check manual entry fallback
+          if (scanCoords && imageIndex === 0 && report.latitude === null) {
+            report.gpsSource = 'Manual Entry';
+            report.confidenceLow = true;
+          }
+          await saveReportDB(report);
+        }
+
+        refreshUIForReport(reportId);
+      } catch (ocrErr) {
+        console.error(`OCR failed on report ${reportId} (image index ${imageIndex}):`, ocrErr);
+        if (scanCoords && imageIndex === 0 && report.latitude === null) {
+          report.gpsSource = 'Manual Entry';
+          report.confidenceLow = true;
+          await saveReportDB(report);
+        }
+        refreshUIForReport(reportId);
+      }
+
+      isOcrActive = false;
+      processOCRQueue();
+    }
+
+    // REGEX WATERMARK PARSER WITH FLOAT CORRECTIONS
+    function parseWatermarkText(text) {
+      let latitude = null;
+      let longitude = null;
+      let date = "";
+      let time = "";
+      let address = "";
+
+      const cleanText = text.replace(/\r/g, '').trim();
+      const lines = cleanText.split('\n').map(l => l.trim()).filter(Boolean);
+
+      // Decimal coordinate patterns (allows digits with or without decimal points)
+      const latDec = /(?:latitude|lat|l\s*a\s*t)\s*[:\-]?\s*(-?\d{1,3}[\.\s]?\d+)\s*[°]?\s*([NSns])?/i;
+      const lonDec = /(?:longitude|lon|lng|long|l\s*o\s*n|l\s*n\s*g)\s*[:\-]?\s*(-?\d{1,4}[\.\s]?\d+)\s*[°]?\s*([EWew])?/i;
+
+      // DMS (Degrees, Minutes, Seconds) coordinate parser
+      const dmsRegex = /(\d+)\s*[°dD\s]\s*(\d+)\s*['’′\s]\s*(\d+(?:\.\d+)?)\s*["”″\s]?\s*([NSWEnswe])?/gi;
+
+      // Single line decimal coordinates pair
+      const decPair = /(-?\d{1,3}[\.\s]?\d+)\s*[°]?\s*([NSns])?\s*[,;\s]\s*(-?\d{1,3}[\.\s]?\d+)\s*[°]?\s*([EWew])?/i;
+
+      let latMatch = cleanText.match(latDec);
+      let lonMatch = cleanText.match(lonDec);
+
+      if (latMatch && lonMatch) {
+        latitude = fixMissingDecimal(latMatch[1], 'lat');
+        if (latMatch[2] && latMatch[2].toUpperCase() === 'S') latitude = -latitude;
+
+        longitude = fixMissingDecimal(lonMatch[1], 'lon');
+        if (lonMatch[2] && lonMatch[2].toUpperCase() === 'W') longitude = -longitude;
+      } else {
+        // Try Coordinate Pairs
+        let pairMatch = cleanText.match(decPair);
+        if (pairMatch) {
+          latitude = fixMissingDecimal(pairMatch[1], 'lat');
+          if (pairMatch[2] && pairMatch[2].toUpperCase() === 'S') latitude = -latitude;
+
+          longitude = fixMissingDecimal(pairMatch[3], 'lon');
+          if (pairMatch[4] && pairMatch[4].toUpperCase() === 'W') longitude = -longitude;
+        } else {
+          // Parse DMS representation
+          const dmsMatches = [...cleanText.matchAll(dmsRegex)];
+          if (dmsMatches.length >= 2) {
+            let latDms = dmsMatches.find(m => /[NSns]/.test(m[4] || ''));
+            let lonDms = dmsMatches.find(m => /[EWew]/.test(m[4] || ''));
+
+            if (!latDms && !lonDms) {
+              latDms = dmsMatches[0];
+              lonDms = dmsMatches[1];
+            }
+
+            if (latDms) {
+              const deg = parseFloat(latDms[1]);
+              const min = parseFloat(latDms[2]);
+              const sec = parseFloat(latDms[3]);
+              latitude = deg + (min / 60) + (sec / 3600);
+              if (latDms[4] && latDms[4].toUpperCase() === 'S') latitude = -latitude;
+            }
+
+            if (lonDms) {
+              const deg = parseFloat(lonDms[1]);
+              const min = parseFloat(lonDms[2]);
+              const sec = parseFloat(lonDms[3]);
+              longitude = deg + (min / 60) + (sec / 3600);
+              if (lonDms[4] && lonDms[4].toUpperCase() === 'W') longitude = -longitude;
+            }
+          }
+        }
+      }
+
+      // Dates / Time extractor
+      const datePattern = /\b(\d{4}[-/.]\d{2}[-/.]\d{2}|\d{2}[-/.]\d{2}[-/.]\d{4})\b/;
+      const timePattern = /\b(\d{2}:\d{2}(?::\d{2})?(?:\s*[APap][Mm])?)\b/;
+
+      let dateMatch = cleanText.match(datePattern);
+      if (dateMatch) date = dateMatch[1];
+
+      let timeMatch = cleanText.match(timePattern);
+      if (timeMatch) time = timeMatch[1];
+
+      // Address isolation fallback
+      const filteredLines = lines.filter(line => {
+        const low = line.toLowerCase();
+        if (low.includes('lat') || low.includes('lon') || low.includes('cam') || low.includes('google') || low.includes('maps')) return false;
+        if (datePattern.test(line) || timePattern.test(line)) return false;
+        if (/\d+\.\d+/.test(line) && (low.includes('n') || low.includes('e') || low.includes('s') || low.includes('w') || low.includes('°'))) return false;
+        if (line.length < 5) return false;
+        return true;
+      });
+
+      if (filteredLines.length > 0) {
+        address = filteredLines.join(', ');
+      }
+
+      // Fix latitude / longitude values matching adjacent lines if labeled parsing failed
+      if (latitude === null || longitude === null) {
+        const numRegex = /-?\b\d+(?:\.\d+)?\b/g;
+        const matches = cleanText.match(numRegex) || [];
+        
+        let candidates = matches.map(m => {
+          let clean = m.replace(/[^\d\-]/g, '');
+          if (m.includes('.')) {
+            return parseFloat(m);
+          } else {
+            if (clean.startsWith('8') || clean.startsWith('9')) {
+              return fixMissingDecimal(clean, 'lat');
+            } else if (clean.startsWith('7') || clean.startsWith('6')) {
+              return fixMissingDecimal(clean, 'lon');
+            }
+            return null;
+          }
+        }).filter(v => v !== null);
+
+        let latCand = candidates.find(c => c >= 8 && c <= 38);
+        let lonCand = candidates.find(c => c >= 68 && c <= 98);
+        
+        if (latCand && lonCand) {
+          latitude = latCand;
+          longitude = lonCand;
+        }
+      }
+
+      return {
+        latitude: latitude ? parseFloat(latitude.toFixed(6)) : null,
+        longitude: longitude ? parseFloat(longitude.toFixed(6)) : null,
+        date,
+        time,
+        address
+      };
+    }
+
+    // OPENSTREETMAP REVERSE GEOCODING QUEUE (Respects 1 request/second rule)
+    function enqueueGeocodeRequest(reportId, lat, lon) {
+      geocodeQueue.push({ reportId, lat, lon });
+      processGeocodeQueue();
+    }
+
+    async function processGeocodeQueue() {
+      if (isGeocodingActive || geocodeQueue.length === 0) return;
+      isGeocodingActive = true;
+
+      const { reportId, lat, lon } = geocodeQueue.shift();
+
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`, {
+          headers: {
+            'User-Agent': 'FieldSurveyGPSApp/1.0 (surveyor@field.com)',
+            'Accept-Language': 'en'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const addressText = data.display_name || "";
+          
+          const report = reports.find(r => r.id === reportId);
+          if (report) {
+            report.address = addressText;
+            await saveReportDB(report);
+            refreshUIForReport(reportId);
+          }
+        } else {
+          console.warn(`Reverse geocode failed with status ${response.status}`);
+        }
+      } catch (err) {
+        console.error("OSM Nominatim API request error:", err);
+      }
+
+      // Delay next request by 1.2s to comply with Nominatim usage policy
+      setTimeout(() => {
+        isGeocodingActive = false;
+        processGeocodeQueue();
+      }, 1200);
+    }
+
+    function refreshUIForReport(reportId) {
+      applyFilters();
+      if (activeReport && activeReport.id === reportId) {
+        activeReport = reports.find(r => r.id === reportId);
+        renderActiveReport();
+      }
+    }
+
+    // RENDER SURROUNDING SIDEBAR QUEUE LIST
+    function renderSidebar() {
+      const container = document.getElementById('queue-list-container');
+      container.innerHTML = "";
+
+      const label = document.getElementById('queue-count-label');
+      label.innerText = `${filteredReports.length} Cards`;
+
+      if (filteredReports.length === 0) {
+        container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 40px 20px; font-size: 0.9rem;">No matching survey cards found.</div>`;
+        return;
+      }
+
+      filteredReports.forEach((report) => {
+        migrateReportSchema(report);
+        const isCompleted = report.shopName && report.phoneNumber && report.reason;
+        const statusClass = isCompleted ? 'completed' : (report.gpsSource.includes('Scanning') || report.gpsSource.includes('Processing') ? 'scanning' : 'pending');
+
+        const queueItem = document.createElement('div');
+        queueItem.className = `queue-item ${activeReport && activeReport.id === report.id ? 'active' : ''}`;
+        queueItem.onclick = () => selectReportCard(report.id);
+
+        let badgeHtml = "";
+        if (report.gpsSource === 'OCR Watermark') {
+          badgeHtml += `<span class="badge-ocr">OCR</span>`;
+        }
+        if (report.confidenceLow) {
+          badgeHtml += `<span class="badge-warning-low">Verify</span>`;
+        }
+
+        // Display the first image thumbnail
+        const mainThumb = report.images && report.images[0] ? report.images[0].thumbnail : report.thumbnail;
+
+        queueItem.innerHTML = `
+          <div class="queue-thumb-wrapper">
+            <img class="queue-thumb" src="${mainThumb}" alt="thumbnail">
+          </div>
+          <div class="queue-item-info">
+            <div class="queue-item-name">${report.fileName}</div>
+            <div class="queue-item-shop">${report.shopName || 'Pending Shop Name'}</div>
+            <div class="queue-item-meta">
+              <span class="status-dot ${statusClass}"></span>
+              <span>${isCompleted ? 'Completed' : (statusClass === 'scanning' ? 'Scanning...' : 'Incomplete')}</span>
+              ${badgeHtml}
+            </div>
+          </div>
+        `;
+        container.appendChild(queueItem);
+      });
+    }
+
+    // RENDER FOCUS EDITOR DETAILS
+    function renderActiveReport() {
+      if (!activeReport) {
+        document.getElementById('active-file-title').innerText = "No Report Active";
+        return;
+      }
+
+      // Safeguard schema structure
+      migrateReportSchema(activeReport);
+
+      // Header display filename
+      document.getElementById('active-file-title').innerText = activeReport.fileName;
+      
+      const realIndex = reports.findIndex(r => r.id === activeReport.id);
+      document.getElementById('active-card-indicator').innerText = `Card ${realIndex + 1} of ${reports.length}`;
+
+      // Set active preview image
+      const activeImgObj = activeReport.images[activeReport.activeImageIndex] || activeReport.images[0];
+      document.getElementById('active-image-preview').src = activeImgObj ? activeImgObj.fileData : "";
+
+      // Render image gallery strip
+      const galleryContainer = document.getElementById('image-gallery-row');
+      galleryContainer.innerHTML = "";
+      
+      activeReport.images.forEach((img, idx) => {
+        const thumbWrapper = document.createElement('div');
+        thumbWrapper.className = `gallery-thumb-wrapper ${activeReport.activeImageIndex === idx ? 'active' : ''}`;
+        thumbWrapper.onclick = () => {
+          activeReport.activeImageIndex = idx;
+          saveReportDB(activeReport);
+          renderActiveReport();
+        };
+        
+        // Thumbnail image
+        thumbWrapper.innerHTML = `<img class="gallery-thumb" src="${img.thumbnail}" alt="thumb">`;
+        
+        // Remove button overlay
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'btn-remove-thumb';
+        removeBtn.title = 'Remove photo from card';
+        removeBtn.innerHTML = '&times;';
+        removeBtn.onclick = (e) => {
+          e.stopPropagation();
+          removeImageFromActiveCard(idx);
+        };
+        thumbWrapper.appendChild(removeBtn);
+        
+        galleryContainer.appendChild(thumbWrapper);
+      });
+
+      // Show Add Photo if card has < 4 images
+      if (activeReport.images.length < 4) {
+        const addBtn = document.createElement('div');
+        addBtn.className = 'gallery-btn-add';
+        addBtn.onclick = () => document.getElementById('gallery-file-picker').click();
+        addBtn.innerHTML = `<i data-lucide="plus" style="width: 18px; height: 18px;"></i>`;
+        galleryContainer.appendChild(addBtn);
+      }
+
+      // Metadata Display
+      const sourceBadge = document.getElementById('meta-source-badge');
+      sourceBadge.innerText = activeReport.gpsSource;
+      sourceBadge.className = 'badge-source';
+      if (activeReport.gpsSource.includes('EXIF')) {
+        sourceBadge.classList.add('exif');
+      } else if (activeReport.gpsSource.includes('OCR')) {
+        sourceBadge.classList.add('ocr');
+      } else {
+        sourceBadge.classList.add('manual');
+      }
+
+      document.getElementById('meta-camera-value').innerText = activeReport.cameraModel || "N/A";
+      document.getElementById('meta-date-value').innerText = activeReport.date || "N/A";
+      document.getElementById('meta-time-value').innerText = activeReport.time || "N/A";
+
+      // OCR Loader
+      const ocrProgressBanner = document.getElementById('ocr-loader-banner');
+      if (activeReport.gpsSource.includes('Scanning') || activeReport.gpsSource.includes('Processing')) {
+        ocrProgressBanner.style.display = 'block';
+        const label = document.getElementById('ocr-scanning-status-label');
+        if (label) label.innerText = `OCR Scanner Running (${activeReport.gpsSource})...`;
+      } else {
+        ocrProgressBanner.style.display = 'none';
+        updateOCRProgressBar(0);
+      }
+
+      // OCR Verification Alerts
+      const confidenceAlert = document.getElementById('ocr-confidence-alert');
+      if (activeReport.confidenceLow && !activeReport.gpsSource.includes('Scanning') && !activeReport.gpsSource.includes('Processing')) {
+        confidenceAlert.style.display = 'flex';
+        document.getElementById('edit-latitude').classList.add('input-warning');
+        document.getElementById('edit-longitude').classList.add('input-warning');
+      } else {
+        confidenceAlert.style.display = 'none';
+        document.getElementById('edit-latitude').classList.remove('input-warning');
+        document.getElementById('edit-longitude').classList.remove('input-warning');
+      }
+
+      // Form Bindings
+      document.getElementById('edit-shop-name').value = activeReport.shopName || "";
+      document.getElementById('edit-phone').value = activeReport.phoneNumber || "";
+      document.getElementById('edit-employee').value = activeReport.employeeName || "";
+      document.getElementById('edit-latitude').value = activeReport.latitude !== null ? activeReport.latitude : "";
+      document.getElementById('edit-longitude').value = activeReport.longitude !== null ? activeReport.longitude : "";
+      document.getElementById('edit-address').value = activeReport.address || "";
+      document.getElementById('edit-remarks').value = activeReport.remarks || "";
+
+      // Reason Dropdown Bindings
+      const reasonSelect = document.getElementById('edit-reason-select');
+      const reasonManual = document.getElementById('edit-reason-manual');
+      
+      const standardReasons = ['dont know about the brand', 'have enough sales and supply', 'recently have supply now no supply'];
+      if (activeReport.reason === "") {
+        reasonSelect.value = "";
+        reasonManual.style.display = 'none';
+        reasonManual.value = "";
+      } else if (standardReasons.includes(activeReport.reason)) {
+        reasonSelect.value = activeReport.reason;
+        reasonManual.style.display = 'none';
+        reasonManual.value = "";
+      } else {
+        reasonSelect.value = "manual_typing";
+        reasonManual.style.display = 'block';
+        reasonManual.value = activeReport.reason;
+      }
+
+      // Most Sales Ticking Bindings
+      const currentSales = activeReport.mostSales ? activeReport.mostSales.split(',').map(s => s.trim()) : [];
+      const checkboxes = document.querySelectorAll('#multiselect-dropdown input[type="checkbox"]');
+      checkboxes.forEach(cb => {
+        cb.checked = currentSales.includes(cb.value);
+      });
+      updateMostSalesBtnLabel(currentSales);
+
+      lucide.createIcons();
+    }
+
+    function updateOCRProgressBar(progress) {
+      const bar = document.getElementById('ocr-progress-bar');
+      if (bar) bar.style.width = `${progress * 100}%`;
+    }
+
+    // ADD MANUALLY ANOTHER PHOTO TO EXISTING CARD (UP TO 4)
+    async function onAddPhotoToActiveCard(event) {
+      if (!activeReport || event.target.files.length === 0) return;
+      
+      const file = event.target.files[0];
+      if (!file.type.startsWith('image/')) {
+        showToast("File is not an image.", "error");
+        return;
+      }
+
+      const thumbnail = await generateThumbnail(file, 200);
+      const fileData = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.readAsDataURL(file);
+      });
+
+      activeReport.images.push({
+        name: file.name,
+        fileData: fileData,
+        thumbnail: thumbnail
+      });
+
+      activeReport.activeImageIndex = activeReport.images.length - 1;
+      await saveReportDB(activeReport);
+      
+      showToast(`Added image to Card!`, "success");
+
+      // Scan new image coordinates
+      scanCardCoordinatesForSingleFile(activeReport.id, file, activeReport.images.length - 1);
+
+      renderActiveReport();
+      renderSidebar();
+    }
+
+    // REMOVE PHOTO MANUALLY FROM CARD
+    async function removeImageFromActiveCard(idx) {
+      if (!activeReport) return;
+
+      if (activeReport.images.length <= 1) {
+        showToast("A report card must have at least one image. Reset database to delete all cards.", "warning");
+        return;
+      }
+
+      if (!confirm("Are you sure you want to remove this photo from this card?")) {
+        return;
+      }
+
+      activeReport.images.splice(idx, 1);
+
+      // Adjust active image index pointer
+      if (activeReport.activeImageIndex >= activeReport.images.length) {
+        activeReport.activeImageIndex = activeReport.images.length - 1;
+      } else if (activeReport.activeImageIndex === idx) {
+        activeReport.activeImageIndex = Math.max(0, idx - 1);
+      }
+
+      await saveReportDB(activeReport);
+      showToast("Image removed from card.", "success");
+      renderActiveReport();
+      renderSidebar();
+    }
+
+    async function scanCardCoordinatesForSingleFile(reportId, file, imageIndex) {
+      const report = reports.find(r => r.id === reportId);
+      if (!report) return;
+
+      try {
+        const metadata = await exifr.parse(file, { gps: true, tiff: true });
+        if (metadata && metadata.latitude !== undefined && metadata.longitude !== undefined) {
+          report.latitude = parseFloat(metadata.latitude.toFixed(6));
+          report.longitude = parseFloat(metadata.longitude.toFixed(6));
+          report.gpsSource = 'EXIF GPS';
+          
+          await saveReportDB(report);
+          enqueueGeocodeRequest(report.id, report.latitude, report.longitude);
+          refreshUIForReport(report.id);
+          return;
+        }
+      } catch (e) {
+        console.warn("Single file EXIF check skipped:", e);
+      }
+
+      // OCR check on newly added photo
+      report.gpsSource = `OCR Scanning (Image ${imageIndex + 1}/${report.images.length})`;
+      await saveReportDB(report);
+      refreshUIForReport(report.id);
+      enqueueOCRRequest(report.id, report.images[imageIndex].fileData, imageIndex);
+    }
+
+    // FORM VALUE SYNC
+    async function saveCurrentField(fieldKey, value) {
+      if (!activeReport) return;
+
+      activeReport[fieldKey] = value;
+
+      if (fieldKey === 'latitude' || fieldKey === 'longitude') {
+        document.getElementById('edit-latitude').classList.remove('input-warning');
+        document.getElementById('edit-longitude').classList.remove('input-warning');
+        if (activeReport.latitude !== null && activeReport.longitude !== null) {
+          activeReport.confidenceLow = false;
+          document.getElementById('ocr-confidence-alert').style.display = 'none';
+        }
+      }
+
+      const isCompleted = activeReport.shopName && activeReport.phoneNumber && activeReport.reason;
+      activeReport.status = isCompleted ? 'completed' : 'pending';
+
+      await saveReportDB(activeReport);
+      
+      const sidebarItem = document.querySelector(`.queue-item.active`);
+      if (sidebarItem) {
+        const nameDiv = sidebarItem.querySelector('.queue-item-shop');
+        if (nameDiv) nameDiv.innerText = activeReport.shopName || 'Pending Shop Name';
+        
+        const statusDot = sidebarItem.querySelector('.status-dot');
+        if (statusDot) {
+          statusDot.className = `status-dot ${isCompleted ? 'completed' : 'pending'}`;
+          statusDot.nextElementSibling.innerText = isCompleted ? 'Completed' : 'Incomplete';
+        }
+      }
+      
+      updateProgressBar();
+    }
+
+    // REASON DROPDOWN CONTROLS
+    function onReasonSelectChange(value) {
+      const manualInput = document.getElementById('edit-reason-manual');
+      if (value === 'manual_typing') {
+        manualInput.style.display = 'block';
+        manualInput.value = "";
+        saveCurrentField('reason', "");
+        manualInput.focus();
+      } else {
+        manualInput.style.display = 'none';
+        saveCurrentField('reason', value);
+      }
+    }
+
+    // MULTI-SELECT DROPDOWN FOR MOST SALES
+    function toggleMultiSelect(event) {
+      event.stopPropagation();
+      const dropdown = document.getElementById('multiselect-dropdown');
+      dropdown.classList.toggle('show');
+    }
+
+    function onMostSalesChange(checkbox) {
+      if (!activeReport) return;
+      
+      let currentSales = activeReport.mostSales ? activeReport.mostSales.split(',').map(s => s.trim()).filter(Boolean) : [];
+      
+      if (checkbox.checked) {
+        if (!currentSales.includes(checkbox.value)) {
+          currentSales.push(checkbox.value);
+        }
+      } else {
+        currentSales = currentSales.filter(v => v !== checkbox.value);
+      }
+
+      const valStr = currentSales.join(', ');
+      saveCurrentField('mostSales', valStr);
+      updateMostSalesBtnLabel(currentSales);
+    }
+
+    function updateMostSalesBtnLabel(list) {
+      const label = document.getElementById('multiselect-value');
+      if (list.length === 0) {
+        label.innerText = "Select products...";
+        label.style.color = 'var(--text-muted)';
+      } else {
+        label.innerText = list.join(', ');
+        label.style.color = 'var(--text-primary)';
+      }
+    }
+
+    // SEARCH FILTERING
+    function handleSearch(e) {
+      searchQuery = e.target.value.toLowerCase().trim();
+      applyFilters();
+    }
+
+    // APPLY FILTERS
+    function applyFilters() {
+      if (!searchQuery) {
+        filteredReports = [...reports];
+      } else {
+        filteredReports = reports.filter(r => {
+          const shop = (r.shopName || '').toLowerCase();
+          const phone = (r.phoneNumber || '').toLowerCase();
+          const address = (r.address || '').toLowerCase();
+          const lat = String(r.latitude || '');
+          const lon = String(r.longitude || '');
+          const fileName = (r.fileName || '').toLowerCase();
+
+          return shop.includes(searchQuery) ||
+                 phone.includes(searchQuery) ||
+                 address.includes(searchQuery) ||
+                 lat.includes(searchQuery) ||
+                 lon.includes(searchQuery) ||
+                 fileName.includes(searchQuery);
+        });
+      }
+      renderSidebar();
+    }
+
+    // UPDATE SURVEY PROGRESS PROGRESSBAR
+    function updateProgressBar() {
+      const total = reports.length;
+      if (total === 0) {
+        document.getElementById('progress-indicator').style.display = 'none';
+        return;
+      }
+
+      const completed = reports.filter(r => r.shopName && r.phoneNumber && r.reason).length;
+      
+      const label = document.querySelector('#progress-indicator span');
+      label.innerText = `Completed ${completed}/${total}`;
+
+      const fill = document.getElementById('progress-bar-fill');
+      fill.style.width = `${(completed / total) * 100}%`;
+    }
+
+    // CARD SELECT & NAVIGATE
+    function selectReportCard(reportId) {
+      const index = reports.findIndex(r => r.id === reportId);
+      if (index !== -1) {
+        activeIndex = index;
+        activeReport = reports[index];
+        renderActiveReport();
+        renderSidebar();
+
+        if (window.innerWidth <= 768) {
+          switchMobileTab('editor');
+        }
+      }
+    }
+
+    function goToPrevReport() {
+      if (reports.length === 0) return;
+      activeIndex = (activeIndex - 1 + reports.length) % reports.length;
+      activeReport = reports[activeIndex];
+      renderActiveReport();
+      renderSidebar();
+      scrollSidebarToActiveItem();
+    }
+
+    function goToNextReport() {
+      if (reports.length === 0) return;
+      activeIndex = (activeIndex + 1) % reports.length;
+      activeReport = reports[activeIndex];
+      renderActiveReport();
+      renderSidebar();
+      scrollSidebarToActiveItem();
+    }
+
+    function scrollSidebarToActiveItem() {
+      const activeEl = document.querySelector('.queue-item.active');
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    // SHORTCUT LISTENERS
+    function setupKeyboardShortcuts() {
+      document.addEventListener('keydown', (e) => {
+        if (reports.length === 0 || activeIndex === -1) return;
+
+        if (e.ctrlKey && e.key === 'Enter') {
+          e.preventDefault();
+          verifyLocationAction();
+        } 
+        else if (e.key === 'Enter' && !e.ctrlKey) {
+          const focusedEl = document.activeElement;
+          if (focusedEl && (focusedEl.tagName === 'INPUT' || focusedEl.tagName === 'SELECT')) {
+            e.preventDefault();
+            copyAndNextAction();
+          }
+        }
+      });
+    }
+
+    // FORMAT SURVEY CARD TEXT TEMPLATE
+    function generateFormattedReportText(report) {
+      let formattedAddress = "";
+      if (report.address) {
+        formattedAddress = report.address
+          .split(',')
+          .map(part => part.trim())
+          .filter(part => part.length > 0)
+          .join('\n');
+      }
+
+      return `Shop: ${report.shopName || ''}
+
+Phone: ${report.phoneNumber || ''}
+
+Reason: ${report.reason || ''}
+
+Most Sales: ${report.mostSales || ''}
+
+Google Maps:
+${report.latitude && report.longitude ? `https://maps.google.com/?q=${report.latitude},${report.longitude}` : ''}
+
+Address:
+${formattedAddress}`;
+    }
+
+    // ROBUST FALLBACK COPY METHOD (Compatible with local file:// protocols in Chrome)
+    function fallbackCopyText(text) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.top = '0';
+      textarea.style.left = '0';
+      textarea.style.width = '2em';
+      textarea.style.height = '2em';
+      textarea.style.padding = '0';
+      textarea.style.border = 'none';
+      textarea.style.outline = 'none';
+      textarea.style.boxShadow = 'none';
+      textarea.style.background = 'transparent';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      try {
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        return successful;
+      } catch (err) {
+        console.error('Fallback copy text failed:', err);
+        document.body.removeChild(textarea);
+        return false;
+      }
+    }
+
+    // UNIFIED TEXT COPY ACTION
+    async function copyText(text, successMsg) {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+          showToast(successMsg, "success");
+          return true;
+        }
+      } catch (err) {
+        console.warn("Clipboard API blocked, running fallback copy method:", err);
+      }
+      
+      const success = fallbackCopyText(text);
+      if (success) {
+        showToast(successMsg, "success");
+        return true;
+      } else {
+        showToast("Clipboard copy failed. Copy manually.", "error");
+        return false;
+      }
+    }
+
+    // ENTER: SAVE, COPY, AND TRIGGER NEXT CARD
+    async function copyAndNextAction() {
+      if (!activeReport) return;
+
+      if (!activeReport.shopName || !activeReport.phoneNumber || !activeReport.reason) {
+        showToast("Please fill out Shop Name, Phone, and Reason before copying.", "warning");
+        
+        if (!activeReport.shopName) document.getElementById('edit-shop-name').focus();
+        else if (!activeReport.phoneNumber) document.getElementById('edit-phone').focus();
+        else if (!activeReport.reason) document.getElementById('edit-reason-select').focus();
+        return;
+      }
+
+      const reportText = generateFormattedReportText(activeReport);
+      const imageFileDataArray = activeReport.images.map(img => img.fileData);
+
+      // Copy text and all images simultaneously
+      const copyResult = await copyReportToClipboard(reportText, imageFileDataArray);
+
+      if (copyResult === true) {
+        showToast(`Copied Report & Images for "${activeReport.shopName}"!`, "success");
+      } else if (copyResult === "text_only") {
+        showToast(`Copied Report Text (Images failed to copy) for "${activeReport.shopName}"!`, "warning");
+      } else {
+        showToast("Clipboard copy failed. Copy manually.", "error");
+        return;
+      }
+
+      activeReport.status = 'completed';
+      await saveReportDB(activeReport);
+      updateProgressBar();
+
+      if (activeIndex < reports.length - 1) {
+        activeIndex++;
+        activeReport = reports[activeIndex];
+        
+        renderActiveReport();
+        renderSidebar();
+        scrollSidebarToActiveItem();
+
+        setTimeout(() => {
+          const shopInput = document.getElementById('edit-shop-name');
+          if (shopInput) {
+            shopInput.focus();
+            shopInput.select();
+          }
+        }, 80);
+      } else {
+        showToast("Reached the end of the survey queue!", "success");
+        renderActiveReport();
+        renderSidebar();
+      }
+    }
+
+    // UNIFIED TEXT & IMAGES COPY HELPER (Copies both report text and all images inside the card)
+    async function copyReportToClipboard(reportText, imageFileDataArray) {
+      if (!imageFileDataArray || imageFileDataArray.length === 0) {
+        return await copyText(reportText, "Report copied to clipboard!");
+      }
+
+      // 1. Selection-based Fallback (works on local file:// protocol and copies multiple images concurrently)
+      try {
+        const tempDiv = document.createElement('div');
+        tempDiv.style.position = 'fixed';
+        tempDiv.style.left = '-9999px';
+        tempDiv.style.top = '-9999px';
+        tempDiv.style.width = '1px';
+        tempDiv.style.height = '1px';
+        tempDiv.style.overflow = 'hidden';
+        tempDiv.contentEditable = 'true';
+
+        // Add all images to copy selection
+        imageFileDataArray.forEach(fileData => {
+          if (fileData) {
+            const img = document.createElement('img');
+            img.src = fileData;
+            tempDiv.appendChild(img);
+            tempDiv.appendChild(document.createElement('br'));
+          }
+        });
+
+        // Add the text
+        const pre = document.createElement('pre');
+        pre.innerText = reportText;
+        tempDiv.appendChild(pre);
+
+        document.body.appendChild(tempDiv);
+
+        // Select the content
+        const range = document.createRange();
+        range.selectNodeContents(tempDiv);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        // Trigger copy command
+        const successful = document.execCommand('copy');
+        selection.removeAllRanges();
+        document.body.removeChild(tempDiv);
+
+        if (successful) {
+          return true;
+        }
+      } catch (fallbackErr) {
+        console.error("Selection copy fallback failed:", fallbackErr);
+      }
+
+      // 2. Try modern Clipboard API (writes text + first image as fallback if selection fails)
+      if (navigator.clipboard && navigator.clipboard.write) {
+        try {
+          const response = await fetch(imageFileDataArray[0]);
+          const blob = await response.blob();
+          
+          // Convert image to PNG for clipboard compatibility
+          const pngBlob = await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.src = URL.createObjectURL(blob);
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.naturalWidth;
+              canvas.height = img.naturalHeight;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              canvas.toBlob((b) => b ? resolve(b) : reject(new Error("Canvas toBlob failed")), 'image/png');
+            };
+            img.onerror = () => reject(new Error("Image load failed"));
+          });
+
+          const data = [
+            new ClipboardItem({
+              "text/plain": new Blob([reportText], { type: "text/plain" }),
+              "image/png": pngBlob
+            })
+          ];
+          await navigator.clipboard.write(data);
+          return true;
+        } catch (err) {
+          console.warn("Unified Clipboard API write failed:", err);
+        }
+      }
+
+      // 3. Last Resort: Copy text only
+      const textSuccess = fallbackCopyText(reportText);
+      if (textSuccess) {
+        console.warn("Copied text only (images copy failed).");
+        return "text_only";
+      }
+
+      return false;
+    }
+
+    // PNG SINGLE CLIPBOARD COPY HELPER
+    async function copySingleImageToClipboard(fileData) {
+      if (!fileData) return false;
+      
+      if (navigator.clipboard && navigator.clipboard.write) {
+        try {
+          const response = await fetch(fileData);
+          const blob = await response.blob();
+          
+          const pngBlob = await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.src = URL.createObjectURL(blob);
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.naturalWidth;
+              canvas.height = img.naturalHeight;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              canvas.toBlob((b) => b ? resolve(b) : reject(new Error("Canvas toBlob failed")), 'image/png');
+            };
+            img.onerror = () => reject(new Error("Image load failed"));
+          });
+
+          const data = [new ClipboardItem({ "image/png": pngBlob })];
+          await navigator.clipboard.write(data);
+          return true;
+        } catch (e) {
+          console.warn("Clipboard API single image copy failed, trying selection fallback:", e);
+        }
+      }
+
+      try {
+        const tempDiv = document.createElement('div');
+        tempDiv.style.position = 'fixed';
+        tempDiv.style.left = '-9999px';
+        tempDiv.style.top = '-9999px';
+        tempDiv.style.width = '1px';
+        tempDiv.style.height = '1px';
+        tempDiv.style.overflow = 'hidden';
+        tempDiv.contentEditable = 'true';
+
+        const img = document.createElement('img');
+        img.src = fileData;
+        tempDiv.appendChild(img);
+
+        document.body.appendChild(tempDiv);
+
+        const range = document.createRange();
+        range.selectNodeContents(tempDiv);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        const successful = document.execCommand('copy');
+        selection.removeAllRanges();
+        document.body.removeChild(tempDiv);
+
+        if (successful) {
+          return true;
+        }
+      } catch (err) {
+        console.error("Single image fallback copy failed:", err);
+      }
+
+      return false;
+    }
+
+    // BUTTON CLICK COPY WITH DOWNLOAD FALLBACK
+    async function copyImageWrapper() {
+      if (!activeReport || !activeReport.images || activeReport.images.length === 0) return;
+
+      const activeImg = activeReport.images[activeReport.activeImageIndex] || activeReport.images[0];
+      
+      const copyBtn = document.getElementById('btn-image-copy');
+      const originalText = copyBtn.innerHTML;
+      copyBtn.innerHTML = `<i data-lucide="loader" class="ocr-spinner"></i> <span>Processing...</span>`;
+      lucide.createIcons();
+
+      try {
+        const success = await copySingleImageToClipboard(activeImg.fileData);
+        if (success) {
+          showToast("Image copied to clipboard!", "success");
+        } else {
+          triggerImageDownload(activeReport);
+        }
+      } catch (err) {
+        console.error("Image copy error:", err);
+        triggerImageDownload(activeReport);
+      } finally {
+        copyBtn.innerHTML = originalText;
+        lucide.createIcons();
+      }
+    }
+
+    function triggerImageDownload(report) {
+      if (!report || !report.images || report.images.length === 0) return;
+      const activeImg = report.images[report.activeImageIndex] || report.images[0];
+      
+      const link = document.createElement('a');
+      link.href = activeImg.fileData;
+      link.download = `survey_${report.shopName || 'unnamed'}_${activeImg.name}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast("Copy failed. Image downloaded instead.", "warning");
+    }
+
+    // VERIFY LOCATION ACTION
+    function verifyLocationAction() {
+      if (!activeReport || activeReport.latitude === null || activeReport.longitude === null) {
+        showToast("No GPS Coordinates available to verify.", "warning");
+        return;
+      }
+      const url = `https://maps.google.com/?q=${activeReport.latitude},${activeReport.longitude}`;
+      window.open(url, '_blank');
+    }
+
+    // MANUALLY RE-QUERY OSM ADDRESS
+    async function manualReverseGeocode() {
+      if (!activeReport || activeReport.latitude === null || activeReport.longitude === null) {
+        showToast("Coordinates are missing.", "warning");
+        return;
+      }
+
+      showToast("Fetching address from OpenStreetMap...", "info");
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${activeReport.latitude}&lon=${activeReport.longitude}&zoom=18`, {
+          headers: {
+            'User-Agent': 'FieldSurveyGPSApp/1.0',
+            'Accept-Language': 'en'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.display_name) {
+            activeReport.address = data.display_name;
+            await saveReportDB(activeReport);
+            document.getElementById('edit-address').value = data.display_name;
+            showToast("Address updated successfully!", "success");
+            renderSidebar();
+          } else {
+            showToast("Address lookup returned empty.", "warning");
+          }
+        } else {
+          showToast("Reverse geocode request failed or rate-limited.", "error");
+        }
+      } catch (err) {
+        console.error("OSM Geocode error:", err);
+        showToast("Failed to fetch address. Verify your connection.", "error");
+      }
+    }
+
+    // INDIVIDUAL FIELD COPIES
+    async function copyCoordinatesAction() {
+      if (!activeReport || activeReport.latitude === null || activeReport.longitude === null) {
+        showToast("Coordinates empty.", "warning");
+        return;
+      }
+      const coords = `${activeReport.latitude}, ${activeReport.longitude}`;
+      await copyText(coords, "Coordinates copied!");
+    }
+
+    async function copyMapsLinkAction() {
+      if (!activeReport || activeReport.latitude === null || activeReport.longitude === null) {
+        showToast("Coordinates empty.", "warning");
+        return;
+      }
+      const link = `https://maps.google.com/?q=${activeReport.latitude},${activeReport.longitude}`;
+      await copyText(link, "Google Maps Link copied!");
+    }
+
+    async function copyAddressAction() {
+      if (!activeReport || !activeReport.address) {
+        showToast("Address is empty.", "warning");
+        return;
+      }
+      await copyText(activeReport.address, "Address copied!");
+    }
+
+    // SHARE ACTIONS (WhatsApp and Telegram URL Integration)
+    async function shareTelegramAction() {
+      if (!activeReport) return;
+      
+      const reportText = generateFormattedReportText(activeReport);
+      const imageFileDataArray = activeReport.images.map(img => img.fileData);
+      
+      // Copy to clipboard first (text & all images) so user can paste it in the shared chat
+      await copyReportToClipboard(reportText, imageFileDataArray);
+      
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if (isMobile) {
+        // Direct deep link to native Telegram app on phone
+        window.location.href = `tg://msg_url?url=&text=${encodeURIComponent(reportText)}`;
+      } else {
+        const telegramUrl = `https://t.me/share/url?url=&text=${encodeURIComponent(reportText)}`;
+        window.open(telegramUrl, '_blank');
+      }
+      showToast("Opened Telegram. Paste (Ctrl+V) in the chat to attach all photos!", "info");
+    }
+
+    async function shareWhatsAppAction() {
+      if (!activeReport) return;
+      
+      const reportText = generateFormattedReportText(activeReport);
+      const imageFileDataArray = activeReport.images.map(img => img.fileData);
+      
+      // Copy to clipboard first (text & all images) so user can paste it in the shared chat
+      await copyReportToClipboard(reportText, imageFileDataArray);
+      
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if (isMobile) {
+        // Direct deep link to native WhatsApp app on phone
+        window.location.href = `whatsapp://send?text=${encodeURIComponent(reportText)}`;
+      } else {
+        const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(reportText)}`;
+        window.open(whatsappUrl, '_blank');
+      }
+      showToast("Opened WhatsApp. Paste (Ctrl+V) in the chat to attach all photos!", "info");
+    }
+
+    // EXPORTS: EXCEL SPREADSHEET (SHEETJS)
+    function triggerExcelExport() {
+      if (reports.length === 0) {
+        showToast("No reports to export.", "warning");
+        return;
+      }
+
+      showToast("Generating Excel file...", "info");
+
+      const rows = reports.map(r => ({
+        'Image Names': r.images ? r.images.map(img => img.name).join(', ') : r.fileName,
+        'Shop': r.shopName || 'N/A',
+        'Phone': r.phoneNumber || 'N/A',
+        'Reason': r.reason || 'N/A',
+        'Most Sales': r.mostSales || 'N/A',
+        'Latitude': r.latitude !== null ? r.latitude : 'N/A',
+        'Longitude': r.longitude !== null ? r.longitude : 'N/A',
+        'Address': r.address || 'N/A',
+        'Google Maps Link': r.latitude && r.longitude ? `https://maps.google.com/?q=${r.latitude},${r.longitude}` : 'N/A',
+        'Date': r.date || 'N/A',
+        'Time': r.time || 'N/A'
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Survey Reports");
+      XLSX.writeFile(workbook, "Reports.xlsx");
+      showToast("Excel export complete!", "success");
+    }
+
+    // EXPORTS: PDF DOCUMENTS (JSPDF)
+    function triggerPDFExport() {
+      if (reports.length === 0) {
+        showToast("No reports to export.", "warning");
+        return;
+      }
+
+      showToast("Generating PDF Document...", "info");
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      reports.forEach((report, index) => {
+        if (index > 0) {
+          doc.addPage();
+        }
+
+        // Header Card Title
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(16);
+        doc.text(`Survey Report - Card ${index + 1}`, 14, 20);
+
+        // Header Line
+        doc.setDrawColor(200, 200, 200);
+        doc.line(14, 24, 196, 24);
+
+        // Info Block Text details
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(50, 50, 50);
+
+        const mapsLink = report.latitude && report.longitude ? `https://maps.google.com/?q=${report.latitude},${report.longitude}` : 'N/A';
+
+        const textContent = `Shop Name:   ${report.shopName || 'N/A'}
+Phone Number:  ${report.phoneNumber || 'N/A'}
+Visit Reason:  ${report.reason || 'N/A'}
+Most Sales:    ${report.mostSales || 'N/A'}
+Latitude:      ${report.latitude !== null ? report.latitude : 'N/A'}
+Longitude:     ${report.longitude !== null ? report.longitude : 'N/A'}
+Google Maps:   ${mapsLink}
+Date Stamp:    ${report.date || 'N/A'}  Time Stamp: ${report.time || 'N/A'}
+Camera:        ${report.cameraModel || 'N/A'}
+Employee:      ${report.employeeName || 'N/A'}
+
+Address:
+${report.address || 'N/A'}
+
+Remarks:
+${report.remarks || 'N/A'}`;
+
+        const splitText = doc.splitTextToSize(textContent, 95);
+        doc.text(splitText, 14, 34);
+
+        // Render first image thumbnail on document page
+        const thumb = report.images && report.images[0] ? report.images[0].thumbnail : report.thumbnail;
+        if (thumb) {
+          try {
+            doc.addImage(thumb, 'JPEG', 115, 34, 80, 80);
+          } catch (err) {
+            console.error("PDF image write error:", err);
+            doc.setFont("helvetica", "italic");
+            doc.text("[Image Draw Error]", 115, 44);
+          }
+        }
+      });
+
+      doc.save("Reports.pdf");
+      showToast("PDF export complete!", "success");
+    }
+
+    // LIGHTBOX CONTROLS
+    function openLightbox() {
+      if (!activeReport || !activeReport.images || activeReport.images.length === 0) return;
+      const modal = document.getElementById('lightbox-modal');
+      const img = document.getElementById('lightbox-img');
+      const activeImg = activeReport.images[activeReport.activeImageIndex] || activeReport.images[0];
+      img.src = activeImg.fileData;
+      modal.style.display = 'flex';
+    }
+
+    function closeLightbox() {
+      document.getElementById('lightbox-modal').style.display = 'none';
+    }
+
+    // RESET DB WINDOWS
+    function openConfirmModal() {
+      document.getElementById('confirm-modal').style.display = 'flex';
+    }
+
+    function closeConfirmModal() {
+      document.getElementById('confirm-modal').style.display = 'none';
+    }
+
+    async function confirmClearAll() {
+      closeConfirmModal();
+      showToast("Resetting database...", "info");
+      
+      try {
+        await clearAllReportsDB();
+        reports = [];
+        filteredReports = [];
+        activeIndex = -1;
+        activeReport = null;
+        
+        showEmptyState();
+        renderSidebar();
+        showToast("Database reset complete.", "success");
+      } catch (err) {
+        console.error("Wipe failed:", err);
+        showToast("Failed to clear database.", "error");
+      }
+    }
+
+    // MOBILE NAVIGATION TABS
+    function switchMobileTab(tab) {
+      mobileActiveTab = tab;
+      const queueTabBtn = document.getElementById('tab-btn-queue');
+      const editorTabBtn = document.getElementById('tab-btn-editor');
+      const sidebar = document.getElementById('sidebar-panel');
+      const editor = document.getElementById('editor-panel');
+
+      if (tab === 'queue') {
+        queueTabBtn.classList.add('active');
+        editorTabBtn.classList.remove('active');
+        sidebar.classList.add('mobile-active');
+        editor.classList.remove('mobile-active');
+      } else {
+        queueTabBtn.classList.remove('active');
+        editorTabBtn.classList.add('active');
+        sidebar.classList.remove('mobile-active');
+        editor.classList.add('mobile-active');
+      }
+    }
+  </script>
+</body>
+</html>
