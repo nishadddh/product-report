@@ -1217,6 +1217,7 @@
 
       .editor-area.mobile-active {
         display: flex;
+        padding-bottom: calc(80px + env(safe-area-inset-bottom));
       }
 
       .editor-grid {
@@ -1953,19 +1954,18 @@
       return parseFloat(clean);
     }
 
-    // Extract India 10-digit phone numbers
+    // Extract 10-digit phone numbers (ignores spacing, dashes, and filters standard 10-digit patterns)
     function extractPhoneNumber(text) {
-      // Find consecutive 10 digits starting with 6,7,8,9
-      const indiaMobileRegex = /\b([6-9]\d{9})\b/;
-      const match = text.match(indiaMobileRegex);
+      // Clean typical mobile/phone symbols
+      const cleaned = text.replace(/[-.\s\(\)]/g, '');
+      
+      // Find standard 10 consecutive digits starting with 6, 7, 8, or 9
+      const match = cleaned.match(/(?:^|[^\d])([6-9]\d{9})(?:$|[^\d])/);
       if (match) return match[1];
 
-      // Try spaced or hyphenated phone numbers
-      const formattedRegex = /\b([6-9]\d{2})[-\s](\d{3})[-\s](\d{4})\b/;
-      const formattedMatch = text.match(formattedRegex);
-      if (formattedMatch) {
-        return formattedMatch[1] + formattedMatch[2] + formattedMatch[3];
-      }
+      // Generic 10 digit fallback
+      const genericMatch = cleaned.match(/(?:^|[^\d])(\d{10})(?:$|[^\d])/);
+      if (genericMatch) return genericMatch[1];
 
       return "";
     }
@@ -2145,14 +2145,17 @@
         
         // Extract Phone Number automatically
         const phoneNo = extractPhoneNumber(extractedText);
-        if (phoneNo && !report.phoneNumber) {
+        if (phoneNo && (!report.phoneNumber || report.phoneNumber.trim() === "")) {
           report.phoneNumber = phoneNo;
-          showToast(`Phone number detected: ${phoneNo}`, 'success');
-          // Save and render update immediately
           await saveReportDB(report);
           if (activeReport && activeReport.id === report.id) {
-            document.getElementById('edit-phone').value = phoneNo;
+            const inputField = document.getElementById('edit-phone');
+            if (inputField) {
+              inputField.value = phoneNo;
+              inputField.dispatchEvent(new Event('input'));
+            }
           }
+          showToast(`Phone number detected: ${phoneNo}`, 'success');
         }
 
         // Apply coordinates if scanCoords is true and coordinates are found
@@ -2995,15 +2998,22 @@ ${formattedAddress}`;
         tempDiv.style.position = 'fixed';
         tempDiv.style.left = '-9999px';
         tempDiv.style.top = '-9999px';
-        tempDiv.style.width = '1px';
-        tempDiv.style.height = '1px';
+        tempDiv.style.width = '100px';
+        tempDiv.style.height = '100px';
         tempDiv.style.overflow = 'hidden';
         tempDiv.contentEditable = 'true';
+
+        const loadPromises = [];
 
         // Add all images to copy selection
         imageFileDataArray.forEach(fileData => {
           if (fileData) {
             const img = document.createElement('img');
+            const p = new Promise(resolve => {
+              img.onload = resolve;
+              img.onerror = resolve;
+            });
+            loadPromises.push(p);
             img.src = fileData;
             tempDiv.appendChild(img);
             tempDiv.appendChild(document.createElement('br'));
@@ -3016,6 +3026,9 @@ ${formattedAddress}`;
         tempDiv.appendChild(pre);
 
         document.body.appendChild(tempDiv);
+
+        // Wait for all images to render in layout tree
+        await Promise.all(loadPromises);
 
         // Select the content
         const range = document.createRange();
@@ -3116,19 +3129,26 @@ ${formattedAddress}`;
         tempDiv.style.position = 'fixed';
         tempDiv.style.left = '-9999px';
         tempDiv.style.top = '-9999px';
-        tempDiv.style.width = '1px';
-        tempDiv.style.height = '1px';
+        tempDiv.style.width = '100px';
+        tempDiv.style.height = '100px';
         tempDiv.style.overflow = 'hidden';
         tempDiv.contentEditable = 'true';
 
         const img = document.createElement('img');
+        const loadPromise = new Promise((resolve) => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
         img.src = fileData;
         tempDiv.appendChild(img);
-
         document.body.appendChild(tempDiv);
 
+        // Wait for image to render fully in layout tree
+        await loadPromise;
+
+        // Select the <img> node itself for binary image serialization
         const range = document.createRange();
-        range.selectNodeContents(tempDiv);
+        range.selectNode(img);
         const selection = window.getSelection();
         selection.removeAllRanges();
         selection.addRange(range);
